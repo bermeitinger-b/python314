@@ -1,7 +1,7 @@
 # Maintainer: Blair Bonnett <blair.bonnett@gmail.com>
 
 pkgname=python314
-pkgver=3.14.0a5
+pkgver=3.14.0a6
 pkgrel=1
 _pyver=3.14.0
 _pybasever=3.14
@@ -40,10 +40,8 @@ options=(!emptydirs)
 source=(
   "https://www.python.org/ftp/python/${_pyver}/Python-${pkgver}.tar.xz"{,.sigstore}
 )
-md5sums=(
-  '0b6ecdb23b04184d77be90bcabbf1474'
-  'SKIP'
-)
+md5sums=('30e3fcf5ef753b274a9eddf30bc405e8'
+         'd4facc97a2aeb355d6dbfaadaa1c8ecd')
 
 verify() {
   cosign verify-blob \
@@ -80,7 +78,8 @@ build() {
               --with-system-libmpdec \
               --enable-loadable-sqlite-extensions \
               --without-ensurepip \
-              --with-tzpath=/usr/share/zoneinfo
+              --with-tzpath=/usr/share/zoneinfo \
+              --enable-optimizations
 
   make EXTRA_CFLAGS="$CFLAGS"
 }
@@ -88,7 +87,7 @@ build() {
 package() {
   cd "${srcdir}/Python-${pkgver}"
   # altinstall: /usr/bin/pythonX.Y but not /usr/bin/python or /usr/bin/pythonX
-  make DESTDIR="${pkgdir}" altinstall
+  make DESTDIR="${pkgdir}" altinstall maninstall
 
   # Split tests
   rm -r "$pkgdir"/usr/lib/python*/{test,idlelib/idle_test}
