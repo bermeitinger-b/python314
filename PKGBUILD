@@ -53,7 +53,7 @@ verify() {
 }
 
 prepare() {
-  cd "${srcdir}/Python-${pkgver}"
+  cd "${srcdir}/Python-${pkgver}" || exit 1
 
   # Ensure that we are using the system copy of various libraries (expat, zlib and libffi),
   # rather than copies shipped in the tarball
@@ -64,7 +64,7 @@ prepare() {
 }
 
 build() {
-  cd "${srcdir}/Python-${pkgver}"
+  cd "${srcdir}/Python-${pkgver}" || exit 1
 
   CFLAGS="${CFLAGS} -fno-semantic-interposition -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer"
   ./configure ax_cv_c_float_words_bigendian=no \
@@ -85,7 +85,7 @@ build() {
 }
 
 package() {
-  cd "${srcdir}/Python-${pkgver}"
+  cd "${srcdir}/Python-${pkgver}" || exit 1
   # altinstall: /usr/bin/pythonX.Y but not /usr/bin/python or /usr/bin/pythonX
   make DESTDIR="${pkgdir}" altinstall maninstall
 
