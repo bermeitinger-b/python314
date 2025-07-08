@@ -1,7 +1,7 @@
 # Maintainer: Blair Bonnett <blair.bonnett@gmail.com>
 
 pkgname=python314
-pkgver=3.14.0b3
+pkgver=3.14.0b4
 pkgrel=1
 _pyver=3.14.0
 _pybasever=3.14
@@ -40,8 +40,8 @@ options=(!emptydirs)
 source=(
   "https://www.python.org/ftp/python/${_pyver}/Python-${pkgver}.tar.xz"{,.sigstore}
 )
-md5sums=('fe1c20dca37feeb82060788d6df42c9d'
-         'd5504a7b23b25f42a7bfa7269e7f9011')
+md5sums=('deed9d6e0eba630a5d085bb2df6f8da3'
+         '8b16da5989f4b40bda60805a2789ca88')
 
 verify() {
   cosign verify-blob \
