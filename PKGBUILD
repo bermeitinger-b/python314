@@ -1,16 +1,16 @@
 # Maintainer: Blair Bonnett <blair.bonnett@gmail.com>
 
-pkgname=python314
-pkgver=3.14.0rc3
+shopt -s extglob
+
+pkgbase=python
+pkgname=(python python-tests)
+pkgver=3.14.0
 pkgrel=1
-_pyver=3.14.0
-_pybasever=3.14
-_pymajver=3
-pkgdesc="Major release 3.14 of the Python high-level programming language"
+_pybasever=${pkgver%.*}
+pkgdesc="The Python programming language (3.14)"
 arch=('x86_64')
 license=('PSF-2.0')
 url="https://www.python.org/"
-
 depends=(
   'bzip2'
   'expat'
@@ -20,11 +20,15 @@ depends=(
   'libxcrypt'
   'openssl'
   'zlib'
+  'tzdata'
+  'mpdecimal'
 )
 makedepends=(
   'bluez-libs'
   'cosign'
   'gdb'
+  'llvm'
+  'llvm-bolt'
   'mpdecimal'
   'sqlite'
   'tk'
@@ -38,10 +42,11 @@ optdepends=(
 options=(!emptydirs)
 
 source=(
-  "https://www.python.org/ftp/python/${_pyver}/Python-${pkgver}.tar.xz"{,.sigstore}
-)
-md5sums=('d86ab97a18b7665ca3bb9d2495a0eeb2'
-         '74d6fdd17a39b52d1268f3ed5380bd38')
+  "https://www.python.org/ftp/python/${pkgver%rc*}/Python-${pkgver}.tar.xz"{,.sigstore}
+  EXTERNALLY-MANAGED)
+md5sums=('41389edaf9c643263cbed9b5ed307df8'
+         '5851da095040130aeded817ff21d9003'
+         '7d2680a8ab9c9fa233deb71378d5a654')
 
 verify() {
   cosign verify-blob \
@@ -55,7 +60,7 @@ verify() {
 prepare() {
   cd "${srcdir}/Python-${pkgver}" || exit 1
 
-  # Ensure that we are using the system copy of various libraries (expat, zlib and libffi),
+  # Ensure that we are using the system copy of various libraries (expat, libffi, and libmpdec),
   # rather than copies shipped in the tarball
   rm -rf Modules/expat
   rm -rf Modules/zlib
@@ -66,44 +71,81 @@ prepare() {
 build() {
   cd "${srcdir}/Python-${pkgver}" || exit 1
 
-  CFLAGS="${CFLAGS} -fno-semantic-interposition -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer"
-  ./configure ax_cv_c_float_words_bigendian=no \
-              --prefix=/usr \
-              --enable-shared \
-              --with-computed-gotos \
-              --with-lto \
-              --enable-ipv6 \
-              --with-system-expat \
-              --with-dbmliborder=gdbm:ndbm \
-              --with-system-libmpdec \
-              --enable-loadable-sqlite-extensions \
-              --without-ensurepip \
-              --with-tzpath=/usr/share/zoneinfo \
-              --enable-optimizations
+  # PGO should be done with -O3
+  CFLAGS="${CFLAGS/-O2/-O3} -ffat-lto-objects"
+
+  export CFLAGS+=" -fno-semantic-interposition"
+  export CXXLAGS+=" -fno-semantic-interposition"
+
+  # Disable bundled pip & setuptools
+  # BOLT is disabled due LLVM or upstream issue
+  # https://github.com/python/cpython/issues/124948
+  ./configure \
+    --prefix=/usr \
+    --enable-ipv6 \
+    --enable-loadable-sqlite-extensions \
+    --enable-optimizations \
+    --enable-shared \
+    --with-computed-gotos \
+    --with-dbmliborder=gdbm:ndbm \
+    --with-lto \
+    --with-system-expat \
+    --with-system-libmpdec \
+    --with-tzpath=/usr/share/zoneinfo \
+    --without-ensurepip
 
   make EXTRA_CFLAGS="$CFLAGS"
 }
 
-package() {
+package_python() {
+  optdepends=(
+    'python-setuptools: for building Python packages using tooling that is usually bundled with Python'
+    'python-pip: for installing Python packages using tooling that is usually bundled with Python'
+    'python-pipx: for installing Python software not packaged on Arch Linux'
+    'sqlite: for a default database integration'
+    'xz: for lzma'
+    'tk: for tkinter'
+  )
+  provides=('python313' 'python-externally-managed')
+  replaces=('python313' 'python-externally-managed')
+
   cd "${srcdir}/Python-${pkgver}" || exit 1
-  # altinstall: /usr/bin/pythonX.Y but not /usr/bin/python or /usr/bin/pythonX
-  make DESTDIR="${pkgdir}" altinstall maninstall
+
+  # Hack to avoid building again
+  sed -i 's/^all:.*$/all: build_all/' Makefile
+
+  # PGO should be done with -O3
+  CFLAGS="${CFLAGS/-O2/-O3}"
+
+  make DESTDIR="${pkgdir}" EXTRA_CFLAGS="$CFLAGS" install
+
+  # Why are these not done by default...
+  ln -s "python3" "${pkgdir}/usr/bin/python"
+  ln -s "python3-config" "${pkgdir}/usr/bin/python-config"
+  ln -s "idle3" "${pkgdir}/usr/bin/idle"
+  ln -s "pydoc3" "${pkgdir}/usr/bin/pydoc"
+  ln -s "python${_pybasever}.1" "${pkgdir}/usr/share/man/man1/python.1"
+
+  # some useful "stuff" FS#46146
+  install -dm755 "${pkgdir}/usr/lib/python${_pybasever}/Tools/"{i18n,scripts}
+  install -m755 "Tools/i18n/"{msgfmt,pygettext}".py" "${pkgdir}/usr/lib/python${_pybasever}/Tools/i18n/"
+  install -m755 "Tools/scripts/"{README,*py} "${pkgdir}/usr/lib/python${_pybasever}/Tools/scripts/"
+
+  # PEP668
+  install -Dm644 "${srcdir}/EXTERNALLY-MANAGED" -t "${pkgdir}/usr/lib/python${_pybasever}/"
 
   # Split tests
-  rm -r "$pkgdir"/usr/lib/python*/{test,idlelib/idle_test}
+  cd "${pkgdir}/usr/lib/python${_pybasever}/" || exit 1
+  rm -r {test,idlelib/idle_test}
+}
 
-  # Avoid conflicts with the main 'python' package.
-  rm -f "${pkgdir}/usr/lib/libpython${_pymajver}.so"
-  rm -f "${pkgdir}/usr/share/man/man1/python${_pymajver}.1"
+package_python-tests() {
+  pkgdesc="Regression tests packages for Python"
+  depends=('python313')
 
-  # Clean-up reference to build directory
-  sed -i "s|$srcdir/Python-${pkgver}:||" "$pkgdir/usr/lib/python${_pybasever}/config-${_pybasever}-${CARCH}-linux-gnu/Makefile"
+  cd "${srcdir}/Python-${pkgver}" || exit 1
 
-  # Add useful scripts FS#46146
-  install -dm755 "${pkgdir}"/usr/lib/python${_pybasever}/Tools/{i18n,scripts}
-  install -m755 Tools/i18n/{msgfmt,pygettext}.py "${pkgdir}"/usr/lib/python${_pybasever}/Tools/i18n/
-  install -m755 Tools/scripts/{README,*py} "${pkgdir}"/usr/lib/python${_pybasever}/Tools/scripts/
-
-  # License
-  install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+  make DESTDIR="${pkgdir}" EXTRA_CFLAGS="$CFLAGS" libinstall
+  cd "${pkgdir}/usr/lib/python${_pybasever}/" || exit 1
+  rm -r !(test)
 }
