@@ -2,10 +2,9 @@
 
 shopt -s extglob
 
-pkgbase=python
-pkgname=(python python-tests)
+pkgname=python314
 pkgver=3.14.0
-pkgrel=1
+pkgrel=2
 _pybasever=${pkgver%.*}
 pkgdesc="The Python programming language (3.14)"
 arch=('x86_64')
@@ -45,8 +44,8 @@ source=(
   "https://www.python.org/ftp/python/${pkgver%rc*}/Python-${pkgver}.tar.xz"{,.sigstore}
   EXTERNALLY-MANAGED)
 md5sums=('41389edaf9c643263cbed9b5ed307df8'
-         '5851da095040130aeded817ff21d9003'
-         '7d2680a8ab9c9fa233deb71378d5a654')
+  '5851da095040130aeded817ff21d9003'
+  '7d2680a8ab9c9fa233deb71378d5a654')
 
 verify() {
   cosign verify-blob \
@@ -97,34 +96,17 @@ build() {
   make EXTRA_CFLAGS="$CFLAGS"
 }
 
-package_python() {
-  optdepends=(
-    'python-setuptools: for building Python packages using tooling that is usually bundled with Python'
-    'python-pip: for installing Python packages using tooling that is usually bundled with Python'
-    'python-pipx: for installing Python software not packaged on Arch Linux'
-    'sqlite: for a default database integration'
-    'xz: for lzma'
-    'tk: for tkinter'
-  )
-  provides=('python313' 'python-externally-managed')
-  replaces=('python313' 'python-externally-managed')
-
+package() {
   cd "${srcdir}/Python-${pkgver}" || exit 1
 
   # Hack to avoid building again
   sed -i 's/^all:.*$/all: build_all/' Makefile
 
-  # PGO should be done with -O3
-  CFLAGS="${CFLAGS/-O2/-O3}"
+  # altinstall: /usr/bin/pythonX.Y but not /usr/bin/python or /usr/bin/pythonX
+  make DESTDIR="${pkgdir}" altinstall maninstall
 
-  make DESTDIR="${pkgdir}" EXTRA_CFLAGS="$CFLAGS" install
-
-  # Why are these not done by default...
-  ln -s "python3" "${pkgdir}/usr/bin/python"
-  ln -s "python3-config" "${pkgdir}/usr/bin/python-config"
-  ln -s "idle3" "${pkgdir}/usr/bin/idle"
-  ln -s "pydoc3" "${pkgdir}/usr/bin/pydoc"
-  ln -s "python${_pybasever}.1" "${pkgdir}/usr/share/man/man1/python.1"
+  # Split tests
+  rm -rf "$pkgdir"/usr/lib/python*/{test,ctypes/test,distutils/tests,idlelib/idle_test,lib2to3/tests,tkinter/test,unittest/test}
 
   # some useful "stuff" FS#46146
   install -dm755 "${pkgdir}/usr/lib/python${_pybasever}/Tools/"{i18n,scripts}
@@ -134,18 +116,6 @@ package_python() {
   # PEP668
   install -Dm644 "${srcdir}/EXTERNALLY-MANAGED" -t "${pkgdir}/usr/lib/python${_pybasever}/"
 
-  # Split tests
-  cd "${pkgdir}/usr/lib/python${_pybasever}/" || exit 1
-  rm -r {test,idlelib/idle_test}
-}
-
-package_python-tests() {
-  pkgdesc="Regression tests packages for Python"
-  depends=('python313')
-
-  cd "${srcdir}/Python-${pkgver}" || exit 1
-
-  make DESTDIR="${pkgdir}" EXTRA_CFLAGS="$CFLAGS" libinstall
-  cd "${pkgdir}/usr/lib/python${_pybasever}/" || exit 1
-  rm -r !(test)
+  # License
+  install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
 }
