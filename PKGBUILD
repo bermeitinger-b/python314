@@ -2,11 +2,14 @@
 
 shopt -s extglob
 
-pkgname=python314
-pkgver=3.14.0
-pkgrel=2
+pkgname=python315
+pkgver=3.15.0a2
+pkgrel=1
 _pybasever=${pkgver%.*}
-pkgdesc="The Python programming language (3.14)"
+_pyurlversion=${pkgver}
+_pyurlversion=${_pyurlversion%rc*}
+_pyurlversion=${_pyurlversion%a*}
+pkgdesc="The Python programming language (3.15)"
 arch=('x86_64')
 license=('PSF-2.0')
 url="https://www.python.org/"
@@ -41,11 +44,11 @@ optdepends=(
 options=(!emptydirs)
 
 source=(
-  "https://www.python.org/ftp/python/${pkgver%rc*}/Python-${pkgver}.tar.xz"{,.sigstore}
+  "https://www.python.org/ftp/python/${_pyurlversion}/Python-${pkgver}.tar.xz"{,.sigstore}
   EXTERNALLY-MANAGED)
-md5sums=('41389edaf9c643263cbed9b5ed307df8'
-  '5851da095040130aeded817ff21d9003'
-  '7d2680a8ab9c9fa233deb71378d5a654')
+md5sums=('8a16a56591101a698e8d0779d41782f4'
+         '0748887e4de2c35ba06406a11ca18a17'
+         '7d2680a8ab9c9fa233deb71378d5a654')
 
 verify() {
   cosign verify-blob \
