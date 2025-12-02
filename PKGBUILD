@@ -6,6 +6,7 @@ pkgname=python314
 pkgver=3.14.1
 pkgrel=1
 _pybasever=${pkgver%.*}
+_pymajver=${_pybasever%.*}
 _pyurlversion=${pkgver}
 _pyurlversion=${_pyurlversion%rc*}
 _pyurlversion=${_pyurlversion%a*}
@@ -111,10 +112,14 @@ package() {
   # Split tests
   rm -rf "$pkgdir"/usr/lib/python*/{test,ctypes/test,distutils/tests,idlelib/idle_test,lib2to3/tests,tkinter/test,unittest/test}
 
+  # Avoid conflicts with the main 'python' package.
+  rm -f "${pkgdir}/usr/lib/libpython${_pymajver}.so"
+  rm -f "${pkgdir}/usr/share/man/man1/python${_pymajver}.1"
+
   # some useful "stuff" FS#46146
-  install -dm755 "${pkgdir}/usr/lib/python${_pybasever}/Tools/"{i18n,scripts}
-  install -m755 "Tools/i18n/"{msgfmt,pygettext}".py" "${pkgdir}/usr/lib/python${_pybasever}/Tools/i18n/"
-  install -m755 "Tools/scripts/"{README,*py} "${pkgdir}/usr/lib/python${_pybasever}/Tools/scripts/"
+  install -dm755 "${pkgdir}"/usr/lib/python"${_pybasever}"/Tools/{i18n,scripts}
+  install -m755 Tools/i18n/{msgfmt,pygettext}.py "${pkgdir}"/usr/lib/python"${_pybasever}"/Tools/i18n/
+  install -m755 Tools/scripts/{README,*py} "${pkgdir}"/usr/lib/python"${_pybasever}"/Tools/scripts/
 
   # PEP668
   install -Dm644 "${srcdir}/EXTERNALLY-MANAGED" -t "${pkgdir}/usr/lib/python${_pybasever}/"
