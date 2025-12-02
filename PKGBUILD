@@ -2,8 +2,8 @@
 
 shopt -s extglob
 
-pkgname=python315
-pkgver=3.15.0a2
+pkgname=python314
+pkgver=3.14.1
 pkgrel=1
 _pybasever=${pkgver%.*}
 _pyurlversion=${pkgver}
@@ -46,8 +46,8 @@ options=(!emptydirs)
 source=(
   "https://www.python.org/ftp/python/${_pyurlversion}/Python-${pkgver}.tar.xz"{,.sigstore}
   EXTERNALLY-MANAGED)
-md5sums=('8a16a56591101a698e8d0779d41782f4'
-         '0748887e4de2c35ba06406a11ca18a17'
+md5sums=('8fa3959c3365c8052b344cd3b8167ff4'
+         '61297b8085093d00198a0ea52e7a9447'
          '7d2680a8ab9c9fa233deb71378d5a654')
 
 verify() {
