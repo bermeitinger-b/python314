@@ -2,15 +2,22 @@
 
 shopt -s extglob
 
-pkgname=python314
+# build freethreaded python based on env
+_PYTHON_FREETHREADED="${PYTHON_FREETHREADED:0}"
+if [ "${_PYTHON_FREETHREADED}" = "true" ]; then
+  pkgname="python314-freethreaded"
+else
+  pkgname=python314
+fi
+
 pkgver=3.14.2
-pkgrel=1
+pkgrel=2
 _pybasever=${pkgver%.*}
 _pymajver=${_pybasever%.*}
 _pyurlversion=${pkgver}
 _pyurlversion=${_pyurlversion%rc*}
 _pyurlversion=${_pyurlversion%a*}
-pkgdesc="The Python programming language (3.15)"
+pkgdesc="The Python programming language (3.14)"
 arch=('x86_64')
 license=('PSF-2.0')
 url="https://www.python.org/"
@@ -48,8 +55,8 @@ source=(
   "https://www.python.org/ftp/python/${_pyurlversion}/Python-${pkgver}.tar.xz"{,.sigstore}
   EXTERNALLY-MANAGED)
 md5sums=('19a31b2838db3b53f9f2db8782bf8773'
-         '89ece9a09242e11ef84876b2779f9713'
-         '7d2680a8ab9c9fa233deb71378d5a654')
+  '89ece9a09242e11ef84876b2779f9713'
+  '7d2680a8ab9c9fa233deb71378d5a654')
 
 verify() {
   cosign verify-blob \
@@ -77,12 +84,13 @@ build() {
   # PGO should be done with -O3
   CFLAGS="${CFLAGS/-O2/-O3} -ffat-lto-objects"
 
-  export CFLAGS+=" -fno-semantic-interposition"
-  export CXXLAGS+=" -fno-semantic-interposition"
+  export CFLAGS+=" -fno-semantic-interposition -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer"
+  export CXXLAGS+=" -fno-semantic-interposition -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer"
 
-  # Disable bundled pip & setuptools
-  # BOLT is disabled due LLVM or upstream issue
-  # https://github.com/python/cpython/issues/124948
+  args=""
+  if [ "${_PYTHON_FREETHREADED}" = "true" ]; then
+    args+=" --disable-gil"
+  fi
   ./configure \
     --prefix=/usr \
     --enable-ipv6 \
@@ -95,7 +103,8 @@ build() {
     --with-system-expat \
     --with-system-libmpdec \
     --with-tzpath=/usr/share/zoneinfo \
-    --without-ensurepip
+    --without-ensurepip \
+    $args
 
   make EXTRA_CFLAGS="$CFLAGS"
 }
@@ -107,16 +116,26 @@ package() {
   sed -i 's/^all:.*$/all: build_all/' Makefile
 
   # altinstall: /usr/bin/pythonX.Y but not /usr/bin/python or /usr/bin/pythonX
-  make DESTDIR="${pkgdir}" altinstall maninstall
+  make DESTDIR="${pkgdir}" altinstall
 
   # Split tests
-  rm -rf "$pkgdir"/usr/lib/python*/{test,ctypes/test,distutils/tests,idlelib/idle_test,lib2to3/tests,tkinter/test,unittest/test}
+  rm -rf "${pkgdir}"/usr/lib/python*/{test,ctypes/test,distutils/tests,idlelib/idle_test,lib2to3/tests,tkinter/test,unittest/test}
 
   # Avoid conflicts with the main 'python' package.
   rm -f "${pkgdir}/usr/lib/libpython${_pymajver}.so"
   rm -f "${pkgdir}/usr/share/man/man1/python${_pymajver}.1"
 
   # some useful "stuff" FS#46146
+  if [ "${_PYTHON_FREETHREADED}" = "true" ]; then
+    _tpybasever="${_pybasever}t"
+    mv "${pkgdir}/usr/bin/idle${_pybasever}" "${pkgdir}/usr/bin/idle${_tpybasever}"
+    mv "${pkgdir}/usr/bin/pydoc${_pybasever}" "${pkgdir}/usr/bin/pydoc${_tpybasever}"
+    rm "${pkgdir}/usr/bin/python${_pybasever}"
+    _pybasever="${_tpybasever}"
+  fi
+
+  rm -r "${pkgdir}/usr/share/man"
+
   install -dm755 "${pkgdir}"/usr/lib/python"${_pybasever}"/Tools/{i18n,scripts}
   install -m755 Tools/i18n/{msgfmt,pygettext}.py "${pkgdir}"/usr/lib/python"${_pybasever}"/Tools/i18n/
   install -m755 Tools/scripts/{README,*py} "${pkgdir}"/usr/lib/python"${_pybasever}"/Tools/scripts/
