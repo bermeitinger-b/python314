@@ -2,16 +2,9 @@
 
 shopt -s extglob
 
-# build freethreaded python based on env
-_PYTHON_FREETHREADED="${PYTHON_FREETHREADED:0}"
-if [ "${_PYTHON_FREETHREADED}" = "true" ]; then
-  pkgname="python314-freethreaded"
-else
-  pkgname=python314
-fi
-
+pkgname=python
 pkgver=3.14.2
-pkgrel=2
+pkgrel=5
 _pybasever=${pkgver%.*}
 _pymajver=${_pybasever%.*}
 _pyurlversion=${pkgver}
@@ -55,8 +48,9 @@ source=(
   "https://www.python.org/ftp/python/${_pyurlversion}/Python-${pkgver}.tar.xz"{,.sigstore}
   EXTERNALLY-MANAGED)
 md5sums=('19a31b2838db3b53f9f2db8782bf8773'
-  '89ece9a09242e11ef84876b2779f9713'
-  '7d2680a8ab9c9fa233deb71378d5a654')
+         '89ece9a09242e11ef84876b2779f9713'
+         '7d2680a8ab9c9fa233deb71378d5a654')
+provides=("python" "python3")
 
 verify() {
   cosign verify-blob \
@@ -70,7 +64,7 @@ verify() {
 prepare() {
   cd "${srcdir}/Python-${pkgver}" || exit 1
 
-  # Ensure that we are using the system copy of various libraries (expat, libffi, and libmpdec),
+  # Ensure that we are using the system copy of various libraries (expat, zlib and libffi),
   # rather than copies shipped in the tarball
   rm -rf Modules/expat
   rm -rf Modules/zlib
@@ -87,10 +81,9 @@ build() {
   export CFLAGS+=" -fno-semantic-interposition -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer"
   export CXXLAGS+=" -fno-semantic-interposition -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer"
 
-  args=""
-  if [ "${_PYTHON_FREETHREADED}" = "true" ]; then
-    args+=" --disable-gil"
-  fi
+  # Disable bundled pip & setuptools
+  # BOLT is disabled due LLVM or upstream issue
+  # https://github.com/python/cpython/issues/124948
   ./configure \
     --prefix=/usr \
     --enable-ipv6 \
@@ -103,39 +96,34 @@ build() {
     --with-system-expat \
     --with-system-libmpdec \
     --with-tzpath=/usr/share/zoneinfo \
-    --without-ensurepip \
-    $args
+    --without-ensurepip
 
   make EXTRA_CFLAGS="$CFLAGS"
 }
 
 package() {
   cd "${srcdir}/Python-${pkgver}" || exit 1
-
-  # Hack to avoid building again
-  sed -i 's/^all:.*$/all: build_all/' Makefile
-
   # altinstall: /usr/bin/pythonX.Y but not /usr/bin/python or /usr/bin/pythonX
-  make DESTDIR="${pkgdir}" altinstall
+  make DESTDIR="${pkgdir}" install
+
+  # Symlinks that define this as the default Python
+  ln -s "python3" "${pkgdir}/usr/bin/python"
+  ln -s "python3-config" "${pkgdir}/usr/bin/python-config"
+  ln -s "idle3" "${pkgdir}/usr/bin/idle"
+  ln -s "pydoc3" "${pkgdir}/usr/bin/pydoc"
+  ln -s "python${_pybasever}.1" "${pkgdir}/usr/share/man/man1/python.1"
 
   # Split tests
-  rm -rf "${pkgdir}"/usr/lib/python*/{test,ctypes/test,distutils/tests,idlelib/idle_test,lib2to3/tests,tkinter/test,unittest/test}
+  rm -r "$pkgdir"/usr/lib/python*/{test,idlelib/idle_test}
 
   # Avoid conflicts with the main 'python' package.
-  rm -f "${pkgdir}/usr/lib/libpython${_pymajver}.so"
-  rm -f "${pkgdir}/usr/share/man/man1/python${_pymajver}.1"
+  #  rm -f "${pkgdir}/usr/lib/libpython${_pymajver}.so"
+  #  rm -f "${pkgdir}/usr/share/man/man1/python${_pymajver}.1"
 
-  # some useful "stuff" FS#46146
-  if [ "${_PYTHON_FREETHREADED}" = "true" ]; then
-    _tpybasever="${_pybasever}t"
-    mv "${pkgdir}/usr/bin/idle${_pybasever}" "${pkgdir}/usr/bin/idle${_tpybasever}"
-    mv "${pkgdir}/usr/bin/pydoc${_pybasever}" "${pkgdir}/usr/bin/pydoc${_tpybasever}"
-    rm "${pkgdir}/usr/bin/python${_pybasever}"
-    _pybasever="${_tpybasever}"
-  fi
+  # Clean-up reference to build directory
+  sed -i "s|$srcdir/Python-${pkgver}:||" "$pkgdir/usr/lib/python${_pybasever}/config-${_pybasever}-${CARCH}-linux-gnu/Makefile"
 
-  rm -r "${pkgdir}/usr/share/man"
-
+  # Add useful scripts FS#46146
   install -dm755 "${pkgdir}"/usr/lib/python"${_pybasever}"/Tools/{i18n,scripts}
   install -m755 Tools/i18n/{msgfmt,pygettext}.py "${pkgdir}"/usr/lib/python"${_pybasever}"/Tools/i18n/
   install -m755 Tools/scripts/{README,*py} "${pkgdir}"/usr/lib/python"${_pybasever}"/Tools/scripts/
